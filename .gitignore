@@ -2,3 +2,5 @@
 *.json
 *.python-version
 __pycache__/
+plan.md
+notebooks/
