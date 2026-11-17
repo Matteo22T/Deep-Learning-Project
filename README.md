@@ -92,3 +92,23 @@ the 225 synthetic timepoints are based on 47 unique real internal patients.
 * **Clinical Consistency**: No synthetic or real patient violates the fundamental clinical rule (there are zero cases where PFS_1y = 1 and OS_1y = 0).
 
 * **Absolute External Isolation**: The 225 synthetic patients are derived from exactly 47 unique internal patients. The external cohort (12 patients) is completely untouched and structurally isolated, guaranteeing a truly independent final evaluation.
+
+
+## 7. Exploratory Data Analysis & Latent Space Geometry (Milestone 2)
+
+### A. Joint Target Distribution & Longitudinal Imbalance
+
+- **Internal Cohort ($N=50$ unique patients):** Stratified across three valid clinical states: **20** `Deceased/Prog. (OS=0, PFS=0)` (40%), **2** `Alive w/ Prog. (OS=1, PFS=0)` (4%), and **28** `Alive, No Prog. (OS=1, PFS=1)` (56%). Overall 1-year survival is 60% (`30/50`) and progression-free survival is 56% (`28/50`). Notably, 9 out of the 13 longitudinal patients (`2 Scans`) belong to the favorable `(1,1)` class, confirming that ungrouped row-level evaluation would artificially inflate positive class prevalence.
+- **Synthetic Cohort ($N=225$):** Contains **92** `(0,0)` (40.9%) and **133** `(1,1)` (59.1%) patients. Because synthetic generation only paired concordant donors, the discordant relapse state `(OS=1, PFS=0)` is completely absent from the synthetic pool.
+
+### B. Representation Collinearity & Host vs. Donor Dominance
+
+- **Intra-Patient Multi-Sequence Similarity (Panel A):** Within the same scan, `T1`, `T1gd`, and `Flair` exhibit strong raw alignment (`0.940–0.955`), whereas `T2` captures more distinct signal (`0.865–0.907`), motivating per-sequence standardization prior to feature aggregation.
+- **Eliminating Common-Mode Collinearity (Panel B):** Raw BrainIAC embeddings across distinct real patients exhibit extreme cosine similarity (`~0.98`), driven by global brain morphology. Sequence-wise Z-score standardization successfully centers inter-patient similarity at `0.00`, exposing patient-specific variance.
+- **Parenchymal Dominance in Synthetic Embeddings (Panel C):** After Z-score scaling, synthetic embeddings maintain a higher median cosine similarity with **Host A (healthy parenchyma, median > 0.50)** than with **Donor B (inpainted tumor, median \~ 0.40)**. Because BrainIAC extracts a global $96 \times 96 \times 96$ volume representation and the host parenchyma preserves `0.995` MS-SSIM fidelity, synthetic vectors remain heavily anchored to Host A's anatomy—proving why excluding both Host A and Donor B from validation folds is mandatory.
+
+### C. Latent Space Topology & Domain Shift Assessment
+
+- **Low Intrinsic Dimensionality (Panel A):** Post-standardization, the first two Principal Components capture **67.8% of the total variance** (`PC1: 48.6%`, `PC2: 19.2%`) across all 768 dimensions, indicating a highly compact linear subspace ideal for regularized linear models and narrow-bottleneck MLPs.
+- **External Cohort Coverage (Panels A & B):** Both PCA and UMAP projections confirm that the 12 external cohort patients (`Real External`, red crosses) lie well within the convex hull of the internal real and synthetic distributions, showing no catastrophic covariate shift.
+- **Outcome Separability (Panels C & D):** Unsupervised global variance directions do not trivially separate `(0,0)` from `(1,1)` outcomes, underscoring the need for supervised feature weighting to isolate fine-grained prognostic tumor signatures from background parenchyma.
