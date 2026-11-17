@@ -1,40 +1,40 @@
 # PCNSL 1-Year Survival Prediction: Representation Learning & Generative Augmentation
 
-This repository contains the codebase for predicting 1-year survival outcomes in Primary Central Nervous System Lymphoma (PCNSL) patients[cite: 2, 38]. 
+This repository contains the codebase for predicting 1-year survival outcomes in Primary Central Nervous System Lymphoma (PCNSL) patients.
 
-The project explores whether synthetic data augmentation, generated via diffusion inpainting (Med-DDPM), can effectively mitigate data scarcity in rare disease modeling and improve the generalization of downstream prognostic classifiers[cite: 2, 5, 31].
+The project explores whether synthetic data augmentation, generated via diffusion inpainting (Med-DDPM), can effectively mitigate data scarcity in rare disease modeling and improve the generalization of downstream prognostic classifiers]
 
 ## 1. Project Overview & Clinical Context
-PCNSL is a rare and aggressive brain tumor, representing only ~2% of all brain tumors[cite: 2]. Due to its rarity and strict privacy regulations, clinical datasets are typically restricted to small, monocentric cohorts[cite: 2]. This data scarcity severely limits the statistical power of Deep Learning models[cite: 2, 5]. 
-The scientific objective of this project is to rigorously evaluate if integrating synthetic patient embeddings into the training set improves predictive performance on real patients, without introducing methodological biases[cite: 31, 37].
+PCNSL is a rare and aggressive brain tumor, representing only ~2% of all brain tumors. Due to its rarity and strict privacy regulations, clinical datasets are typically restricted to small, monocentric cohorts. This data scarcity severely limits the statistical power of Deep Learning models. 
+The scientific objective of this project is to rigorously evaluate if integrating synthetic patient embeddings into the training set improves predictive performance on real patients, without introducing methodological biases.
 
 ## 2. Predictive Targets
-The models predict two binary clinical outcomes assessed at 365 days after the start of induction therapy[cite: 38]:
-* **OS_1y (Overall Survival):** `1` = Alive at 1 year; `0` = Deceased within 1 year[cite: 38].
-* **PFS_1y (Progression-Free Survival):** `1` = Alive and free from relapse/progression at 1 year; `0` = Relapse, progression, or death within 1 year[cite: 38].
+The models predict two binary clinical outcomes assessed at 365 days after the start of induction therapy:
+* **OS_1y (Overall Survival):** `1` = Alive at 1 year; `0` = Deceased within 1 year.
+* **PFS_1y (Progression-Free Survival):** `1` = Alive and free from relapse/progression at 1 year; `0` = Relapse, progression, or death within 1 year.
 
-**Logical Constraint:** By clinical definition, if a patient is progression-free at 1 year (`PFS_1y = 1`), they must also be alive (`OS_1y = 1`)[cite: 38].
+**Logical Constraint:** By clinical definition, if a patient is progression-free at 1 year (`PFS_1y = 1`), they must also be alive (`OS_1y = 1`).
 
 ## 3. Dataset & Feature Representation
-We do not operate on raw 3D MRI volumes. The input data consists of feature vectors extracted using **BrainIAC**, a ViT-B/16 foundation model pre-trained on brain MRIs via self-supervised learning[cite: 38].
-* Each patient/timepoint has 4 MRI sequences: **T1, T1gd, T2, and Flair**[cite: 38].
-* Each sequence is represented by a **768-dimensional embedding** (the first patch token of the BrainIAC model)[cite: 38].
-* **High Collinearity:** The embeddings share a massive common component (mean cosine similarity ~0.93 across different volumes)[cite: 38]. Features must be strictly standardized using only the training set statistics before modeling[cite: 38].
+We do not operate on raw 3D MRI volumes. The input data consists of feature vectors extracted using **BrainIAC**, a ViT-B/16 foundation model pre-trained on brain MRIs via self-supervised learning.
+* Each patient/timepoint has 4 MRI sequences: **T1, T1gd, T2, and Flair**.
+* Each sequence is represented by a **768-dimensional embedding** (the first patch token of the BrainIAC model).
+* **High Collinearity:** The embeddings share a massive common component (mean cosine similarity ~0.93 across different volumes). Features must be strictly standardized using only the training set statistics before modeling.
 
 ## 4. Data Quirks & Leakage Prevention (Methodology)
 In medical machine learning, preventing data leakage is more critical than maximizing raw accuracy. This repository implements strict defenses against the following dataset-specific quirks:
 
 ### A. Longitudinal Timepoints (Intra-Patient Leakage)
-* **The Issue:** The internal cohort consists of 50 unique real patients[cite: 38]. However, 13 of these patients have scans at two different timepoints (`baseline` and `pre-bx`), yielding 63 total timepoints (252 rows)[cite: 38]. Both timepoints of a single patient share the exact same clinical outcome[cite: 38].
-* **The Solution:** A standard random split would likely place `baseline` in the training set and `pre-bx` in the test set, causing massive data leakage. We enforce **GroupKFold cross-validation** strictly grouped by the real patient ID (`PCNSL<id>`)[cite: 36, 38].
+* **The Issue:** The internal cohort consists of 50 unique real patients. However, 13 of these patients have scans at two different timepoints (`baseline` and `pre-bx`), yielding 63 total timepoints (252 rows). Both timepoints of a single patient share the exact same clinical outcome.
+* **The Solution:** A standard random split would likely place `baseline` in the training set and `pre-bx` in the test set, causing massive data leakage. We enforce **GroupKFold cross-validation** strictly grouped by the real patient ID (`PCNSL<id>`).
 
 ### B. Generative Inpainting Ancestry (Cross-Patient Synthetic Leakage)
-* **The Issue:** Synthetic patients were generated by inpainting the tumor of a donor patient (B) into the healthy parenchyma of a host patient (A)[cite: 22, 23]. The synthetic IDs follow the format `A<id>__B<id>`[cite: 38].
-* **The Solution:** A synthetic patient is only injected into a specific training fold if **NEITHER** patient A **NOR** patient B are present in the corresponding validation fold[cite: 27, 36, 38]. A custom parser constructs an ancestry graph to filter the synthetic pool dynamically per fold.
+* **The Issue:** Synthetic patients were generated by inpainting the tumor of a donor patient (B) into the healthy parenchyma of a host patient (A). The synthetic IDs follow the format `A<id>__B<id>`.
+* **The Solution:** A synthetic patient is only injected into a specific training fold if **NEITHER** patient A **NOR** patient B are present in the corresponding validation fold. A custom parser constructs an ancestry graph to filter the synthetic pool dynamically per fold.
 
 ### C. High-Dimensionality vs. Low Sample Size
-* **The Issue:** We have 768 features per sequence, but only 50 real independent patients[cite: 38].
-* **The Solution:** We focus on highly regularized conventional models (Logistic Regression with L1/L2, SVM, Random Forest) and compact MLPs[cite: 44]. To account for high variance on the small 10-patient validation folds, all evaluation metrics are reported with **95% Confidence Intervals** computed via out-of-fold patient-level bootstrap[cite: 36, 38, 44].
+* **The Issue:** We have 768 features per sequence, but only 50 real independent patients.
+* **The Solution:** *TODO*
 
 ## 5. Repository Structure
 *TODO*
