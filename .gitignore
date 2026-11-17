@@ -3,4 +3,4 @@
 *.python-version
 __pycache__/
 plan.md
-output_kaggle/
+output_kaggle/.DS_Store
