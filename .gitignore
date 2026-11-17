@@ -4,3 +4,4 @@
 __pycache__/
 plan.md
 output_kaggle/.DS_Store
+*.log
