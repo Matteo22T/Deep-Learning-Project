@@ -2,7 +2,7 @@
 
 This repository contains the codebase for predicting 1-year survival outcomes in Primary Central Nervous System Lymphoma (PCNSL) patients.
 
-The project explores whether synthetic data augmentation, generated via diffusion inpainting (Med-DDPM), can effectively mitigate data scarcity in rare disease modeling and improve the generalization of downstream prognostic classifiers]
+The project explores whether synthetic data augmentation, generated via diffusion inpainting (Med-DDPM), can effectively mitigate data scarcity in rare disease modeling and improve the generalization of downstream prognostic classifiers.
 
 ## 1. Project Overview & Clinical Context
 PCNSL is a rare and aggressive brain tumor, representing only ~2% of all brain tumors. Due to its rarity and strict privacy regulations, clinical datasets are typically restricted to small, monocentric cohorts. This data scarcity severely limits the statistical power of Deep Learning models. 
@@ -15,7 +15,16 @@ The models predict two binary clinical outcomes assessed at 365 days after the s
 
 **Logical Constraint:** By clinical definition, if a patient is progression-free at 1 year (`PFS_1y = 1`), they must also be alive (`OS_1y = 1`).
 
-## 3. Dataset & Feature Representation
+## 3. Available Datasets & Feature Representation
+The provided data is partitioned into four CSV files:
+
+| File | Content | Labels |
+| :--- | :--- | :--- |
+| `synthetic_with_labels.csv` | 225 synthetic patients (900 rows), used strictly for training augmentation. | OS_1y, PFS_1y |
+| `real_with_labels.csv` | 50 real patients from the internal cohort (252 rows), used for cross-validation. | OS_1y, PFS_1y |
+| `real_without_labels.csv` | 12 real patients from the external cohort (48 rows). | None |
+| `real_without_labels_ground_truth.csv`| Ground truth labels for the external cohort (48 rows), strictly held out for final evaluation. | OS_1y, PFS_1y |
+
 We do not operate on raw 3D MRI volumes. The input data consists of feature vectors extracted using **BrainIAC**, a ViT-B/16 foundation model pre-trained on brain MRIs via self-supervised learning.
 * Each patient/timepoint has 4 MRI sequences: **T1, T1gd, T2, and Flair**.
 * Each sequence is represented by a **768-dimensional embedding** (the first patch token of the BrainIAC model).
@@ -34,7 +43,52 @@ In medical machine learning, preventing data leakage is more critical than maxim
 
 ### C. High-Dimensionality vs. Low Sample Size
 * **The Issue:** We have 768 features per sequence, but only 50 real independent patients.
-* **The Solution:** *TODO*
+* **The Solution:** To account for the high variance typical of small validation folds, all evaluation metrics are reported with **95% Confidence Intervals** computed via out-of-fold patient-level bootstrap.
 
 ## 5. Repository Structure
 *TODO*
+
+## 6. Data Validation
+To ensure the integrity of the provided dataset and mathematically prevent leakage before any modeling, we run an automated validation suite (`make validate`). 
+
+**Execution Output:**
+```text
+--- Validation Synthetic Data ---
+✓ correct number of rows: 900.
+✓ Sequences T1, T1gd, T2, Flair present for all.
+✓ No missing values in the 768 BrainIAC embeddings.
+✓ Clinical logic and label consistency verified.
+
+--- Validation Real Internal Data ---
+✓ correct number of rows: 252.
+✓ Sequences T1, T1gd, T2, Flair present for all.
+✓ No missing values in the 768 BrainIAC embeddings.
+✓ Clinical logic and label consistency verified.
+
+--- Validation Real External Data ---
+✓ correct number of rows: 48.
+✓ Sequences T1, T1gd, T2, Flair present for all.
+✓ No missing values in the 768 BrainIAC embeddings.
+
+--- Validation External Ground Truth ---
+✓ correct number of rows: 48.
+✓ Sequences T1, T1gd, T2, Flair present for all.
+✓ No missing values in the 768 BrainIAC embeddings.
+✓ Clinical logic and label consistency verified.
+✓ 100% ID and sequence alignment with real_without_labels.csv (12 unique patients).
+
+--- Analysis of Real Internal Patients ---
+Found 50 unique independent patients out of 63 total timepoints.
+
+--- Synthetic Data Leakage Analysis ---
+the 225 synthetic timepoints are based on 47 unique real internal patients.
+✓ Leakage Security Confirmed: all parent patients A and B are from the internal training set only.
+```
+
+**Methodological Takeaways:**
+
+* **Longitudinal Confirmation**: The script mathematically confirms that 13 patients out of the 50 have dual timepoints (63 total timepoints - 50 unique patients = 13 longitudinal cases). This mandates grouping by patient_id during cross-validation.
+
+* **Clinical Consistency**: No synthetic or real patient violates the fundamental clinical rule (there are zero cases where PFS_1y = 1 and OS_1y = 0).
+
+* **Absolute External Isolation**: The 225 synthetic patients are derived from exactly 47 unique internal patients. The external cohort (12 patients) is completely untouched and structurally isolated, guaranteeing a truly independent final evaluation.
