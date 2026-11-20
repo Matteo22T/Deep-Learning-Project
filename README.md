@@ -94,7 +94,7 @@ the 225 synthetic timepoints are based on 47 unique real internal patients.
 * **Absolute External Isolation**: The 225 synthetic patients are derived from exactly 47 unique internal patients. The external cohort (12 patients) is completely untouched and structurally isolated, guaranteeing a truly independent final evaluation.
 
 
-## 7. Exploratory Data Analysis & Latent Space Geometry (Milestone 2)
+## 7. Exploratory Data Analysis & Latent Space Geometry 
 
 ### A. Joint Target Distribution & Longitudinal Imbalance
 
