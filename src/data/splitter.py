@@ -99,7 +99,9 @@ def build_clinical_strata(df_real: pd.DataFrame) -> pd.Series:
     # copy to avoid modifying the original DataFrame
     work = df_real.copy()
     # we take the real id removing the timepoint suffix
-    work["base_patient_id"] = work["patient_id"].astype(str).apply(extract_real_patient_id)
+    work["base_patient_id"] = (
+        work["patient_id"].astype(str).apply(extract_real_patient_id)
+    )
 
     strata_map: dict[str, int] = {}
     # group rows belonging to same patient
@@ -147,7 +149,7 @@ def get_eligible_synthetic_ids(
 
     eligible: list[str] = []
     for synth_id in unique_synth_ids:
-        # get the host and donor ids for the synthetic patient and check if they are in the validation set, 
+        # get the host and donor ids for the synthetic patient and check if they are in the validation set,
         # if not add the synthetic id to the eligible list
         host_id, donor_id = get_synthetic_parents(synth_id)
         if host_id not in val_set and donor_id not in val_set:
@@ -256,7 +258,6 @@ def generate_patient_folds(
     fold_seed_stride = int(getattr(config.splitting, "fold_seed_stride", 1))
     quota_integer_tol = float(getattr(config.splitting, "quota_integer_tol", 1e-9))
 
-
     # build the strata for real patients
     strata_series = build_clinical_strata(df_real).sort_index()
     # real patients ids
@@ -264,7 +265,7 @@ def generate_patient_folds(
     # clinical class labels for each real patient
     y_strata = strata_series.to_numpy(dtype=int)
 
-    # the class (OS=1, PFS=0) is rare, with only 2 patients in the dataset, 
+    # the class (OS=1, PFS=0) is rare, with only 2 patients in the dataset,
     # so we log a warning if it cannot appear in every fold
     rare_count = int((y_strata == 1).sum())
     if rare_count < n_splits:
@@ -279,7 +280,9 @@ def generate_patient_folds(
     # copy the df and add a column with the base patient id, which is the patient id without the timepoint suffix
     # this will be used to group the timepoints of the same patient together when splitting into folds
     work_real = df_real.copy()
-    work_real["base_patient_id"] = work_real["patient_id"].astype(str).apply(extract_real_patient_id)
+    work_real["base_patient_id"] = (
+        work_real["patient_id"].astype(str).apply(extract_real_patient_id)
+    )
 
     # skf object 5 folds, shuffle before splitting, random state for reproducibility
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
@@ -287,17 +290,21 @@ def generate_patient_folds(
 
     # for each fold, we get the train and validation indices of the unique patients,
     # not all df so that we can group the timepoints of the same patient together and avoid leakage
-    for fold_idx, (train_idx, val_idx) in enumerate(skf.split(unique_patients, y_strata)):
+    for fold_idx, (train_idx, val_idx) in enumerate(
+        skf.split(unique_patients, y_strata)
+    ):
         # take the ids of the 2 groups
         train_pids = tuple(sorted(unique_patients[train_idx].tolist()))
         val_pids = tuple(sorted(unique_patients[val_idx].tolist()))
         val_set = set(val_pids)
 
-        # get the timepoint ids of the training and validation patients, so that 
+        # get the timepoint ids of the training and validation patients, so that
         # they go in the same group
         train_tp_ids = tuple(
             sorted(
-                work_real.loc[work_real["base_patient_id"].isin(train_pids), "patient_id"]
+                work_real.loc[
+                    work_real["base_patient_id"].isin(train_pids), "patient_id"
+                ]
                 .astype(str)
                 .unique()
                 .tolist()

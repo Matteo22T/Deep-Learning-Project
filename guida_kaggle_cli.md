@@ -180,11 +180,17 @@ from pathlib import Path
 ON_KAGGLE = Path("/kaggle").exists()
 
 if ON_KAGGLE:
-    repo = Path("/tmp/repo")          # in /tmp: non finisce negli output
+    repo = Path("/tmp/repo")  # in /tmp: non finisce negli output
     if not repo.exists():
         subprocess.run(
-            ["git", "clone", "--depth", "1",
-             "https://github.com/TUO_UTENTE/TUA_REPO.git", str(repo)],
+            [
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                "https://github.com/TUO_UTENTE/TUA_REPO.git",
+                str(repo),
+            ],
             check=True,
         )
     sys.path.append(str(repo))
@@ -194,7 +200,9 @@ if ON_KAGGLE:
     assert found, "file non trovato in /kaggle/input"
     data_dir = found[0].parent
 
-    os.chdir("/kaggle/working")       # i file salvati con path relativi finiscono negli output
+    os.chdir(
+        "/kaggle/working"
+    )  # i file salvati con path relativi finiscono negli output
 else:
     data_dir = Path("data")
 ```
@@ -203,6 +211,7 @@ Se la repo è privata, salva un token come **Kaggle Secret** dalla UI web (Add-o
 
 ```python
 from kaggle_secrets import UserSecretsClient
+
 token = UserSecretsClient().get_secret("GITHUB_TOKEN")
 ```
 

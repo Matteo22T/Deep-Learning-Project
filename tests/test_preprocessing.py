@@ -288,7 +288,6 @@ def test_splitter_parent_leakage_and_nested_quotas() -> None:
         )
 
 
-
 def test_splitter_config_changes_folds_ratios_and_determinism() -> None:
     df_real = _make_toy_real_df(n_patients=50)
     df_synth = _make_toy_synth_df(n_synth=225)
@@ -365,7 +364,6 @@ def test_splitter_config_changes_folds_ratios_and_determinism() -> None:
         )
 
 
-
 def test_splitter_rare_stratum_reported_and_invalid_pair_rejected() -> None:
     cfg = _make_config(random_seed=42, n_splits=5)
     df_real = _make_toy_real_df(n_patients=50)
@@ -417,13 +415,17 @@ def test_aggregator_strategies_sequence_order_and_timepoint_preservation() -> No
 
     # Changing configured sequence order changes concatenation block layout
     custom_order = ["Flair", "T2", "T1gd", "T1"]
-    df_custom = _make_toy_real_df(n_patients=1, n_features=2, sequence_order=custom_order)
+    df_custom = _make_toy_real_df(
+        n_patients=1, n_features=2, sequence_order=custom_order
+    )
     cfg_custom_concat = _make_config(strategy="concat", sequence_order=custom_order)
     custom_res = aggregate_sequences(df_custom, config=cfg_custom_concat)
     assert custom_res.sequence_order == tuple(custom_order)
     assert custom_res.features.shape == (2, 8)
     # First 2 features come from "Flair" (s_idx=0 -> base value 0.0 + 0.1*f_idx)
-    np.testing.assert_allclose(custom_res.features[0, :2], np.array([0.0, 0.1], dtype=np.float32))
+    np.testing.assert_allclose(
+        custom_res.features[0, :2], np.array([0.0, 0.1], dtype=np.float32)
+    )
 
 
 def test_aggregator_missing_and_duplicate_sequences() -> None:

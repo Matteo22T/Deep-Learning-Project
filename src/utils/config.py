@@ -24,7 +24,11 @@ def _is_strict_int(value: Any) -> bool:
 
 
 def _is_strict_number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+    )
 
 
 def _to_namespace(value: Any) -> Any:
@@ -78,7 +82,9 @@ class ConfigLoader:
 
         ratios = split.get("synthetic_ratios")
         if not isinstance(ratios, list) or len(ratios) == 0:
-            raise ValueError("config.splitting.synthetic_ratios must be a non-empty list.")
+            raise ValueError(
+                "config.splitting.synthetic_ratios must be a non-empty list."
+            )
 
         seen_ratios: set[float] = set()
         for r in ratios:
@@ -101,11 +107,15 @@ class ConfigLoader:
 
         stride = split.get("fold_seed_stride", 1)
         if not _is_strict_int(stride) or stride < 0:
-            raise ValueError("config.splitting.fold_seed_stride must be a non-negative integer.")
+            raise ValueError(
+                "config.splitting.fold_seed_stride must be a non-negative integer."
+            )
 
         tol = split.get("quota_integer_tol", 1e-9)
         if not _is_strict_number(tol) or float(tol) <= 0.0:
-            raise ValueError("config.splitting.quota_integer_tol must be a positive number.")
+            raise ValueError(
+                "config.splitting.quota_integer_tol must be a positive number."
+            )
 
         # 3. Preprocessing settings
         prep = data.get("preprocessing")
@@ -113,8 +123,14 @@ class ConfigLoader:
             raise ValueError("Missing or invalid 'preprocessing' section.")
 
         feats = prep.get("features")
-        if not isinstance(feats, dict) or not isinstance(feats.get("prefix"), str) or not feats["prefix"]:
-            raise ValueError("config.preprocessing.features.prefix must be a non-empty string.")
+        if (
+            not isinstance(feats, dict)
+            or not isinstance(feats.get("prefix"), str)
+            or not feats["prefix"]
+        ):
+            raise ValueError(
+                "config.preprocessing.features.prefix must be a non-empty string."
+            )
 
         seqs = prep.get("sequences")
         order = seqs.get("order") if isinstance(seqs, dict) else None
@@ -123,14 +139,20 @@ class ConfigLoader:
             or len(order) == 0
             or not all(isinstance(s, str) and s for s in order)
         ):
-            raise ValueError("config.preprocessing.sequences.order must be a non-empty list of strings.")
+            raise ValueError(
+                "config.preprocessing.sequences.order must be a non-empty list of strings."
+            )
         if len(set(order)) != len(order):
-            raise ValueError("config.preprocessing.sequences.order must not contain duplicate entries.")
+            raise ValueError(
+                "config.preprocessing.sequences.order must not contain duplicate entries."
+            )
 
         scaling = prep.get("scaling")
         eps = scaling.get("epsilon") if isinstance(scaling, dict) else None
         if not _is_strict_number(eps) or float(eps) <= 0.0:
-            raise ValueError("config.preprocessing.scaling.epsilon must be a positive number.")
+            raise ValueError(
+                "config.preprocessing.scaling.epsilon must be a positive number."
+            )
 
         agg = prep.get("aggregation")
         if not isinstance(agg, dict):
@@ -141,9 +163,13 @@ class ConfigLoader:
                 f"Invalid aggregation strategy {strategy!r}; expected 'mean', 'concat', or 'per_sequence'."
             )
         if not isinstance(agg.get("strict_sequences"), bool):
-            raise ValueError("config.preprocessing.aggregation.strict_sequences must be a boolean.")
+            raise ValueError(
+                "config.preprocessing.aggregation.strict_sequences must be a boolean."
+            )
         if not isinstance(agg.get("allow_duplicates"), bool):
-            raise ValueError("config.preprocessing.aggregation.allow_duplicates must be a boolean.")
+            raise ValueError(
+                "config.preprocessing.aggregation.allow_duplicates must be a boolean."
+            )
 
     def get_config(self) -> SimpleNamespace:
         """Return the validated configuration SimpleNamespace."""

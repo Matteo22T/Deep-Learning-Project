@@ -19,6 +19,7 @@ from types import SimpleNamespace
 
 """
 
+
 # used to store the mean and std of each sequence, computed on the training set of each fold
 @dataclass
 class _SequenceStats:
@@ -57,8 +58,8 @@ class PerSequenceStandardScaler:
         config: SimpleNamespace,
     ) -> None:
         """
-            Parameters:
-            config: The configuration object containing the settings for the scaler.
+        Parameters:
+        config: The configuration object containing the settings for the scaler.
         """
         self.sequences: tuple[str, ...] = tuple(
             str(s) for s in config.preprocessing.sequences.order
@@ -69,15 +70,15 @@ class PerSequenceStandardScaler:
             raise ValueError("config.preprocessing.scaling.epsilon must be positive.")
         if not self.sequences:
             raise ValueError("config.preprocessing.sequences.order must be non-empty.")
-        # store the mean and std of each sequence, computed on the training set of each fold 
+        # store the mean and std of each sequence, computed on the training set of each fold
         self._stats_by_seq: dict[str, _SequenceStats] = {}
         # store names of the feature columns, resolved from the training DataFrame
         self._feature_cols: list[str] = []
 
     def _resolve_feature_cols(self, df: pd.DataFrame) -> list[str]:
         """
-            indentify the feature columns in the DataFrame based on the specified prefix 
-            and sort them numerically if possible.
+        indentify the feature columns in the DataFrame based on the specified prefix
+        and sort them numerically if possible.
         """
         cols = [c for c in df.columns if c.startswith(self.feature_prefix)]
         if not cols:
@@ -93,7 +94,7 @@ class PerSequenceStandardScaler:
 
     def _validate_known_sequences(self, df: pd.DataFrame, context: str) -> pd.Series:
         """
-            check if the sequences in the DataFrame are a subset of the ones in the config
+        check if the sequences in the DataFrame are a subset of the ones in the config
         """
         seq_col = df["sequence"].astype(str)
         allowed_set = set(self.sequences)
@@ -120,7 +121,7 @@ class PerSequenceStandardScaler:
         # iterate over each sequence and compute the mean and std for the features of that sequence
         for seq in self.sequences:
             # get the feature values for the current sequence from the training DataFrame
-            # if seq="T1", then vals will be a 2D array of shape (n_samples, n_features) 
+            # if seq="T1", then vals will be a 2D array of shape (n_samples, n_features)
             # containing the feature values for all rows where sequence=="T1"
             vals = df_train.loc[seq_col == seq, feat_cols].to_numpy(dtype=np.float64)
             if vals.shape[0] == 0:
@@ -139,7 +140,7 @@ class PerSequenceStandardScaler:
             zero_var_mask = (~np.isfinite(std)) | (std <= self.eps)
             safe_scale = np.where(zero_var_mask, 1.0, std)
 
-            # store statistics 
+            # store statistics
             self._stats_by_seq[seq] = _SequenceStats(
                 mean=mean.astype(np.float32),
                 scale=safe_scale.astype(np.float32),
@@ -151,7 +152,9 @@ class PerSequenceStandardScaler:
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """Transform features using fitted training statistics without refitting."""
         if not self._stats_by_seq:
-            raise RuntimeError("PerSequenceStandardScaler must be fitted before transform.")
+            raise RuntimeError(
+                "PerSequenceStandardScaler must be fitted before transform."
+            )
         if "sequence" not in df.columns:
             raise ValueError("Input DataFrame must contain a 'sequence' column.")
 
@@ -166,7 +169,7 @@ class PerSequenceStandardScaler:
 
         out = df.copy()
 
-        # iterate over each sequence 
+        # iterate over each sequence
         for seq, stats in self._stats_by_seq.items():
             # mask is a boolean array indicating which rows in the DataFrame correspond to the current sequence
             mask = seq_col == seq
@@ -175,7 +178,7 @@ class PerSequenceStandardScaler:
 
             # get the original values for the features of the current sequence,
             raw = out.loc[mask, cols].to_numpy(dtype=np.float32)
-            # apply z-score standardization using the mean and std computed from the training set, 
+            # apply z-score standardization using the mean and std computed from the training set,
             scaled = (raw - stats.mean) / stats.scale
             # and handle zero variance features by setting them to 0.0
             scaled[:, stats.zero_variance_mask] = 0.0

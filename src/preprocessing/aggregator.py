@@ -249,7 +249,9 @@ def aggregate_sequences(
         # stack the list of feature vectors into a 2D NumPy array of shape (n_samples, n_features)
         features = np.vstack(out_features_list).astype(np.float32, copy=False)
     else:
-        expected_dim = n_features * len(sequence_order) if strategy == "concat" else n_features
+        expected_dim = (
+            n_features * len(sequence_order) if strategy == "concat" else n_features
+        )
         features = np.empty((0, expected_dim), dtype=np.float32)
 
     return AggregatedDataset(
