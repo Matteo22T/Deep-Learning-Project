@@ -1,0 +1,30 @@
+experiment:
+  name: pcnsl_survival_milestone3
+  random_seed: 42
+
+splitting:
+  n_splits: 5
+  synthetic_ratios:
+    - 0.0
+    - 0.25
+    - 0.5
+    - 1.0
+    - 2.0
+  fold_seed_stride: 1
+  quota_integer_tol: 1.0e-9
+
+preprocessing:
+  features:
+    prefix: f
+  sequences:
+    order:
+      - T1
+      - T1gd
+      - T2
+      - Flair
+  scaling:
+    epsilon: 1.0e-8
+  aggregation:
+    strategy: mean
+    strict_sequences: true
+    allow_duplicates: false

@@ -3,6 +3,7 @@
 check:
 	uv run ruff check src scripts
 	uv run ty check src scripts
+	pytest --maxfail=1 --disable-warnings -q
 
 format:
 	uv run ruff format src scripts
