@@ -1,0 +1,61 @@
+# Methodological note on longitudinal timepoints (Option B):
+# Baseline and pre-bx scans are kept as separate observations rather than
+# averaged across timepoints. Patients with two timepoints therefore contribute
+# more rows to per-sequence scaler fitting and downstream model training.
+
+experiment:
+  name: pcnsl_real_only_nested_cv
+  random_seed: 42
+  targets:
+    - OS_1y
+    - PFS_1y
+
+splitting:
+  n_splits: 5
+  synthetic_ratios:
+    - 0.0
+  fold_seed_stride: 1
+  quota_integer_tol: 1.0e-9
+
+preprocessing:
+  features:
+    prefix: f
+  sequences:
+    order:
+      - T1
+      - T1gd
+      - T2
+      - Flair
+  scaling:
+    epsilon: 1.0e-8
+  aggregation:
+    strategy: mean
+    strict_sequences: true
+    allow_duplicates: false
+
+evaluation:
+  decision_threshold: 0.5
+  patient_aggregation: mean_prob
+  bootstrap_resamples: 2000
+  bootstrap_stratified: true
+  confidence_level: 0.95
+  check_clinical_consistency: true
+  run_exploratory_consistency_correction: false
+
+tuning:
+  protocol: nested_cv
+  inner_n_splits: 4
+  inner_seed_stride: 100
+  selection_metric: roc_auc
+  tie_breaker_metrics:
+    - pr_auc
+    - brier_score
+  refit_epoch_strategy: median_best_epoch
+  search_space:
+    aggregation_strategies:
+      - mean
+      - concat
+
+model: {}
+
+training: {}

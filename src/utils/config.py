@@ -18,6 +18,10 @@ import yaml
     ecc..
 """
 
+_ALLOWED_TARGETS = {"OS_1y", "PFS_1y"}
+_ALLOWED_TUNING_METRICS = {"roc_auc", "pr_auc", "brier_score"}
+_ALLOWED_TUNING_AGGREGATIONS = {"mean", "concat"}
+
 
 def _is_strict_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
@@ -70,6 +74,20 @@ class ConfigLoader:
         random_seed = exp.get("random_seed")
         if not _is_strict_int(random_seed):
             raise ValueError("config.experiment.random_seed must be an integer.")
+
+        if "targets" in exp:
+            targets = exp["targets"]
+            if (
+                not isinstance(targets, list)
+                or len(targets) == 0
+                or not all(isinstance(t, str) and t in _ALLOWED_TARGETS for t in targets)
+            ):
+                raise ValueError(
+                    f"config.experiment.targets must be a non-empty list of valid targets "
+                    f"from {sorted(_ALLOWED_TARGETS)}."
+                )
+            if len(set(targets)) != len(targets):
+                raise ValueError("config.experiment.targets must not contain duplicates.")
 
         # 2. Splitting settings
         split = data.get("splitting")
@@ -169,6 +187,148 @@ class ConfigLoader:
         if not isinstance(agg.get("allow_duplicates"), bool):
             raise ValueError(
                 "config.preprocessing.aggregation.allow_duplicates must be a boolean."
+            )
+
+        # 4. Optional evaluation settings (experiment_config.yaml)
+        if "evaluation" in data:
+            ConfigLoader._validate_evaluation(data["evaluation"])
+
+        # 5. Optional tuning settings (experiment_config.yaml)
+        if "tuning" in data:
+            ConfigLoader._validate_tuning(data["tuning"])
+
+        # 6. Optional framework-agnostic model/training placeholders
+        if "model" in data and not isinstance(data["model"], dict):
+            raise ValueError("config.model must be a mapping when provided.")
+        if "training" in data and not isinstance(data["training"], dict):
+            raise ValueError("config.training must be a mapping when provided.")
+
+    @staticmethod
+    def _validate_evaluation(ev: Any) -> None:
+        if not isinstance(ev, dict):
+            raise ValueError("Invalid 'evaluation' section: expected a mapping.")
+
+        threshold = ev.get("decision_threshold")
+        if not _is_strict_number(threshold) or not (0.0 < float(threshold) < 1.0):
+            raise ValueError(
+                "config.evaluation.decision_threshold must be a number strictly in (0, 1)."
+            )
+
+        patient_agg = ev.get("patient_aggregation")
+        if patient_agg != "mean_prob":
+            raise ValueError(
+                f"Invalid config.evaluation.patient_aggregation {patient_agg!r}; expected 'mean_prob'."
+            )
+
+        n_resamples = ev.get("bootstrap_resamples")
+        if not _is_strict_int(n_resamples) or n_resamples < 100:
+            raise ValueError(
+                "config.evaluation.bootstrap_resamples must be an integer >= 100."
+            )
+
+        if not isinstance(ev.get("bootstrap_stratified"), bool):
+            raise ValueError(
+                "config.evaluation.bootstrap_stratified must be a boolean."
+            )
+
+        conf_level = ev.get("confidence_level")
+        if not _is_strict_number(conf_level) or not (0.0 < float(conf_level) < 1.0):
+            raise ValueError(
+                "config.evaluation.confidence_level must be a number strictly in (0, 1)."
+            )
+
+        if not isinstance(ev.get("check_clinical_consistency"), bool):
+            raise ValueError(
+                "config.evaluation.check_clinical_consistency must be a boolean."
+            )
+
+        if not isinstance(ev.get("run_exploratory_consistency_correction"), bool):
+            raise ValueError(
+                "config.evaluation.run_exploratory_consistency_correction must be a boolean."
+            )
+
+    @staticmethod
+    def _validate_tuning(tuning: Any) -> None:
+        if not isinstance(tuning, dict):
+            raise ValueError("Invalid 'tuning' section: expected a mapping.")
+
+        protocol = tuning.get("protocol")
+        if protocol != "nested_cv":
+            raise ValueError(
+                f"Invalid config.tuning.protocol {protocol!r}; expected 'nested_cv'."
+            )
+
+        inner_n_splits = tuning.get("inner_n_splits")
+        if not _is_strict_int(inner_n_splits) or inner_n_splits < 2:
+            raise ValueError(
+                "config.tuning.inner_n_splits must be an integer >= 2."
+            )
+
+        inner_stride = tuning.get("inner_seed_stride", 100)
+        if not _is_strict_int(inner_stride) or inner_stride < 0:
+            raise ValueError(
+                "config.tuning.inner_seed_stride must be a non-negative integer."
+            )
+
+        selection_metric = tuning.get("selection_metric")
+        if (
+            not isinstance(selection_metric, str)
+            or selection_metric not in _ALLOWED_TUNING_METRICS
+        ):
+            raise ValueError(
+                f"Invalid config.tuning.selection_metric {selection_metric!r}; "
+                f"expected one of {sorted(_ALLOWED_TUNING_METRICS)}."
+            )
+
+        if "tie_breaker_metrics" in tuning:
+            tie_breakers = tuning["tie_breaker_metrics"]
+            if (
+                not isinstance(tie_breakers, list)
+                or not all(
+                    isinstance(m, str) and m in _ALLOWED_TUNING_METRICS
+                    for m in tie_breakers
+                )
+            ):
+                raise ValueError(
+                    f"config.tuning.tie_breaker_metrics must be a list of metrics "
+                    f"from {sorted(_ALLOWED_TUNING_METRICS)}."
+                )
+            if len(set(tie_breakers)) != len(tie_breakers):
+                raise ValueError(
+                    "config.tuning.tie_breaker_metrics must not contain duplicates."
+                )
+            if selection_metric in tie_breakers:
+                raise ValueError(
+                    "config.tuning.tie_breaker_metrics must not duplicate selection_metric."
+                )
+
+        refit_strategy = tuning.get("refit_epoch_strategy")
+        if refit_strategy != "median_best_epoch":
+            raise ValueError(
+                f"Invalid config.tuning.refit_epoch_strategy {refit_strategy!r}; "
+                "expected 'median_best_epoch'."
+            )
+
+        search_space = tuning.get("search_space")
+        if not isinstance(search_space, dict):
+            raise ValueError("Missing or invalid 'tuning.search_space' section.")
+
+        agg_strategies = search_space.get("aggregation_strategies")
+        if (
+            not isinstance(agg_strategies, list)
+            or len(agg_strategies) == 0
+            or not all(
+                isinstance(s, str) and s in _ALLOWED_TUNING_AGGREGATIONS
+                for s in agg_strategies
+            )
+        ):
+            raise ValueError(
+                f"config.tuning.search_space.aggregation_strategies must be a non-empty "
+                f"list of strategies from {sorted(_ALLOWED_TUNING_AGGREGATIONS)}."
+            )
+        if len(set(agg_strategies)) != len(agg_strategies):
+            raise ValueError(
+                "config.tuning.search_space.aggregation_strategies must not contain duplicates."
             )
 
     def get_config(self) -> SimpleNamespace:

@@ -6,7 +6,7 @@ from typing import Sequence
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import KFold, StratifiedKFold
 
 from types import SimpleNamespace
 
@@ -83,6 +83,20 @@ class FoldSplit:
     sampled_synthetic_by_ratio: dict[float, tuple[str, ...]]
     # number of patients in each class in the validation fold
     val_strata_counts: dict[str, int]
+
+
+@dataclass(frozen=True)
+class InnerFoldSplit:
+    """Patient-level inner cross-validation split within an outer training fold."""
+
+    outer_fold_idx: int
+    fold_idx: int
+    train_real_patient_ids: tuple[str, ...]
+    val_real_patient_ids: tuple[str, ...]
+    train_real_timepoint_ids: tuple[str, ...]
+    val_real_timepoint_ids: tuple[str, ...]
+    val_strata_counts: dict[str, int]
+    used_stratified_split: bool
 
 
 def build_clinical_strata(df_real: pd.DataFrame) -> pd.Series:
@@ -359,3 +373,131 @@ def generate_patient_folds(
         )
 
     return folds
+
+
+def generate_inner_patient_splits(
+    df_outer_train: pd.DataFrame,
+    config: SimpleNamespace,
+    outer_fold_idx: int,
+) -> list[InnerFoldSplit]:
+    """Generate deterministic inner patient-level splits inside an outer training fold.
+
+    Operates exclusively on the unique real patients present in `df_outer_train`,
+    keeping all longitudinal timepoints of each patient in the same inner fold
+    and never duplicating or dropping patients.
+
+    Stratification policy:
+    - Uses `StratifiedKFold` on the 3-state clinical strata whenever it is
+      applicable, including when rare strata have fewer members than
+      `inner_n_splits` (even singleton strata).
+    - Logs an explicit warning whenever the rare `(OS=1, PFS=0)` stratum has
+      fewer patients than `inner_n_splits` (including `0`).
+    - Falls back deterministically to `KFold` ONLY if `StratifiedKFold` raises
+      `ValueError` on a degenerate small dataset; in that case, an explicit
+      warning is logged noting that stratification is no longer guaranteed.
+    """
+    if isinstance(outer_fold_idx, bool) or not isinstance(outer_fold_idx, int) or outer_fold_idx < 0:
+        raise ValueError(
+            f"outer_fold_idx must be a non-negative integer, got {outer_fold_idx!r}."
+        )
+
+    inner_n_splits = int(config.tuning.inner_n_splits)
+    if inner_n_splits < 2:
+        raise ValueError(
+            f"config.tuning.inner_n_splits must be >= 2, got {inner_n_splits}."
+        )
+    random_state = int(config.experiment.random_seed)
+    inner_seed_stride = int(getattr(config.tuning, "inner_seed_stride", 100))
+    inner_seed = random_state + (outer_fold_idx + 1) * inner_seed_stride
+
+    strata_series = build_clinical_strata(df_outer_train).sort_index()
+    unique_patients = np.array(list(strata_series.index), dtype=str)
+    y_strata = strata_series.to_numpy(dtype=int)
+
+    if len(unique_patients) < inner_n_splits:
+        raise ValueError(
+            f"Cannot create {inner_n_splits} inner folds with only "
+            f"{len(unique_patients)} unique patients."
+        )
+
+    rare_count = int((y_strata == 1).sum())
+    if rare_count < inner_n_splits:
+        logger.warning(
+            "Outer fold %d: rare stratum (OS=1, PFS=0) has %d patient(s) across "
+            "%d inner folds; it cannot appear in every inner validation fold. "
+            "No patients are duplicated or dropped.",
+            outer_fold_idx,
+            rare_count,
+            inner_n_splits,
+        )
+
+    skf = StratifiedKFold(
+        n_splits=inner_n_splits, shuffle=True, random_state=inner_seed
+    )
+    used_stratified_split = True
+    try:
+        split_indices = list(skf.split(unique_patients, y_strata))
+    except ValueError as exc:
+        logger.warning(
+            "Outer fold %d: StratifiedKFold could not split the dataset (%s). "
+            "Falling back to deterministic KFold over unique patients; "
+            "stratification is no longer guaranteed. No patients are duplicated or dropped.",
+            outer_fold_idx,
+            exc,
+        )
+        kf = KFold(n_splits=inner_n_splits, shuffle=True, random_state=inner_seed)
+        split_indices = list(kf.split(unique_patients))
+        used_stratified_split = False
+
+    work_real = df_outer_train.copy()
+    work_real["base_patient_id"] = (
+        work_real["patient_id"].astype(str).apply(extract_real_patient_id)
+    )
+
+    inner_folds: list[InnerFoldSplit] = []
+    for fold_idx, (train_idx, val_idx) in enumerate(split_indices):
+        train_pids = tuple(sorted(unique_patients[train_idx].tolist()))
+        val_pids = tuple(sorted(unique_patients[val_idx].tolist()))
+
+        train_tp_ids = tuple(
+            sorted(
+                work_real.loc[
+                    work_real["base_patient_id"].isin(train_pids), "patient_id"
+                ]
+                .astype(str)
+                .unique()
+                .tolist()
+            )
+        )
+        val_tp_ids = tuple(
+            sorted(
+                work_real.loc[
+                    work_real["base_patient_id"].isin(val_pids), "patient_id"
+                ]
+                .astype(str)
+                .unique()
+                .tolist()
+            )
+        )
+
+        val_strata = y_strata[val_idx]
+        strata_counts = {
+            STRATUM_TO_STATE_LABEL[0]: int((val_strata == 0).sum()),
+            STRATUM_TO_STATE_LABEL[1]: int((val_strata == 1).sum()),
+            STRATUM_TO_STATE_LABEL[2]: int((val_strata == 2).sum()),
+        }
+
+        inner_folds.append(
+            InnerFoldSplit(
+                outer_fold_idx=outer_fold_idx,
+                fold_idx=fold_idx,
+                train_real_patient_ids=train_pids,
+                val_real_patient_ids=val_pids,
+                train_real_timepoint_ids=train_tp_ids,
+                val_real_timepoint_ids=val_tp_ids,
+                val_strata_counts=strata_counts,
+                used_stratified_split=used_stratified_split,
+            )
+        )
+
+    return inner_folds
