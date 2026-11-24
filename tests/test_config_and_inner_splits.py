@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 import pytest
+import yaml
 from sklearn.model_selection import StratifiedKFold
 
 from src.data.loader import extract_real_patient_id
@@ -112,9 +113,11 @@ def test_experiment_config_yaml_loading_and_nested_access() -> None:
     assert cfg.tuning.tie_breaker_metrics == ["pr_auc", "brier_score"]
     assert cfg.tuning.refit_epoch_strategy == "median_best_epoch"
     assert cfg.tuning.search_space.aggregation_strategies == ["mean", "concat"]
-    # Framework-agnostic placeholders remain empty in PR2
-    assert cfg.model == SimpleNamespace()
-    assert cfg.training == SimpleNamespace()
+    # Model and training sections hold the starting values of the MLP
+    assert cfg.model.architecture == "mlp"
+    assert cfg.model.hidden_units == [64, 32]
+    assert cfg.training.optimizer == "adam"
+    assert cfg.training.loss_weights == SimpleNamespace(OS_1y=1.0, PFS_1y=1.0)
 
 
 def test_experiment_config_validation_rejects_invalid_values(tmp_path: Path) -> None:
@@ -156,12 +159,11 @@ def test_experiment_config_validation_rejects_invalid_values(tmp_path: Path) -> 
     with pytest.raises(ValueError, match="experiment.targets"):
         ConfigLoader(bad_target)
 
-    # Non-mapping model placeholder
+    # Non-mapping model section
     bad_model = tmp_path / "bad_model.yaml"
-    bad_model.write_text(
-        base_yaml.replace("model: {}", "model: invalid_string"),
-        encoding="utf-8",
-    )
+    bad_model_data = yaml.safe_load(base_yaml)
+    bad_model_data["model"] = "invalid_string"
+    bad_model.write_text(yaml.safe_dump(bad_model_data), encoding="utf-8")
     with pytest.raises(ValueError, match="config.model must be a mapping"):
         ConfigLoader(bad_model)
 

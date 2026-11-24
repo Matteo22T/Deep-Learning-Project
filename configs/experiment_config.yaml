@@ -56,6 +56,26 @@ tuning:
       - mean
       - concat
 
-model: {}
+model:
+  architecture: mlp
+  # one entry per hidden layer; an empty list gives the linear baseline
+  hidden_units:
+    - 64
+    - 32
+  activation: relu
+  dropout: 0.3
+  l2: 1.0e-3
 
-training: {}
+training:
+  optimizer: adam
+  learning_rate: 1.0e-3
+  # total loss = sum of the per-target binary cross-entropies times these weights
+  loss_weights:
+    OS_1y: 1.0
+    PFS_1y: 1.0
+  batch_size: 16
+  max_epochs: 200
+  early_stopping:
+    monitor: val_loss
+    patience: 20
+    restore_best_weights: true
