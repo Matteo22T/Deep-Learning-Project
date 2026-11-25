@@ -31,9 +31,6 @@ def main() -> None:
     validate_dataframe_integrity(
         df_gt, "External Ground Truth", expected_rows=48, has_labels=True
     )
-    validate_dataframe_integrity(
-        df_gt, "External Ground Truth", expected_rows=48, has_labels=True
-    )
 
     # 100% ID and sequence match with real_without_labels.csv
     unique_ext_patients = set(df_gt["patient_id"].apply(extract_real_patient_id))
